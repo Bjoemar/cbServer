@@ -15,7 +15,7 @@ const io = socketIO(server);
 let Message = require('./Model/Message.js');
 
 mongoose.connect(getSecret('url'), {useUnifiedTopology: true , useNewUrlParser: true });
-
+mongoose.set('useFindAndModify', false);
 let db = mongoose.connection;
 db.on("error",console.error.bind(console, "MongoDb Connection error"));
 
@@ -29,7 +29,7 @@ var server_ip_address = process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0'
 app.use(bodyParser.urlencoded({extended : false}));
 app.use(bodyParser.json());
 
-// server.listen(APIPORT,'192.168.1.107', () => console.log(`LISTENING ON PORT ${APIPORT}`));
+// server.listen(APIPORT,'192.168.1.110', () => console.log(`LISTENING ON PORT ${APIPORT}`));
 
 server.listen(server_port , server_ip_address , function(){
 	console.log('Listening on' + server_ip_address + ', port' + server_port);	
@@ -58,6 +58,7 @@ router.post('/sendMessage',(req,res)=>{
 })
 
 
+
 router.post('/getMessages',(req,res)=>{
 	Message.find().sort({_id : 1}).exec((err,message)=> {
 		if (err) res.json({'success' : false});
@@ -66,6 +67,26 @@ router.post('/getMessages',(req,res)=>{
 })
 
 
-// setInterval(function(){
-// 	io.sockets.emit("FromAPI", 'HELLO');
-// },1000)
+
+router.post('/removeMessage',(req,res)=>{
+	Message.deleteOne({ _id: req.body.messageID }, function (err) {
+	  	if(err) console.log(err);
+	  	Message.find().sort({_id : 1}).exec((err,message)=> {
+	  		if (err) res.json({'success' : false});
+	  		io.sockets.emit("refreshMessage", message);
+	  		return res.json({'success' : true, 'message' : message});		
+	  	})
+	});
+});
+
+
+router.post('/UpdateMessage' , (req,res) => {
+	Message.findOneAndUpdate({ _id: req.body.msgID} , {$set : {message : req.body.newMessage}} , { returnOriginal: false } , (err, doc)=> {
+		if (err) return res.json({'success' : false});	
+		Message.find().sort({_id : 1}).exec((err,message)=> {
+			if (err) res.json({'success' : false});
+			io.sockets.emit("refreshMessage", message);
+			return res.json({'success' : true});		
+		});
+	});
+})
